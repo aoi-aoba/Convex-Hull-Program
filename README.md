@@ -4,6 +4,8 @@ OpenGL 4.1 Core 및 ImGui를 사용한 볼록 껍질(Convex Hull) 알고리즘 �
 
 A visualization tool for the Convex Hull algorithm using OpenGL 4.1 Core and ImGui.
 
+<img width="900" height="600" alt="image" src="https://github.com/user-attachments/assets/25e5bb05-74c4-42d5-9fd6-f68bf78f6735" />
+
 ---
 
 ## 🌐 Language
