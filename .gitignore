@@ -1,0 +1,19 @@
+# Visual Studio Build Folders
+x64/
+.vs/
+out/
+build/
+x64/
+Debug/
+Release/
+bin/
+obj/
+
+# vcpkg
+vcpkg_installed/
+
+*.user
+*.filters
+*.sln.idsache
+*.exe
+*.csv
