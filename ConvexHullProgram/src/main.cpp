@@ -14,16 +14,24 @@
 #include "convexhull.h"
 #include "fileio.h"
 
-using namespace std;
 using namespace ImGui;
 
 GLuint vertexArray = 0;
 GLuint vertexBuffer = 0;
 GLuint program = 0;
 
+float pointColor[4] = { 1.f, 1.f, 1.f, 1.f };
+float hullColor[4] = { 1.f, 0.f, 0.f, 0.f };
+float bgColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+float pointSize = 8.f;
+float lineWidth = 3.f;
+float pixelInput[2] = { 0.f, 0.f };
+
 static int pointCountToMake = 100;
 static int randomSeed = 12345;
 static bool showConvexHull = false;
+static bool showPointSettings = true;
+static bool showStyleSettings = true;
 
 vector<Point> userPoints;
 vector<Point> hullPoints;
@@ -104,12 +112,14 @@ int main(void) {
     glfwTerminate();
 }
 
+using namespace ImGui;
+
 void render(GLFWwindow* window) {
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
     glViewport(0, 0, width, height);
 
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -141,30 +151,97 @@ void render(GLFWwindow* window) {
     PopStyleColor();
     PopStyleVar();
 
-    SetNextWindowPos(ImVec2(screenW - 270.0f, 60.0f), ImGuiCond_Always);
-    SetNextWindowSize(ImVec2(250.0f, 0.0f));
+    SetNextWindowPos(ImVec2(screenW - 260, 50));
+    SetNextWindowSize(ImVec2(250, 0));
 
-    Begin("Point Setting", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-    Text("Application average \n%.3f ms/frame \n(%.1f FPS)", 1000.0f / GetIO().Framerate, GetIO().Framerate);
+    Begin("Control Panel", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    TextDisabled("Application:\n%.3f ms/frame\n(%.1f FPS)", 1000.0f / GetIO().Framerate, GetIO().Framerate);
+        if (CollapsingHeader("Point Management", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-    InputInt("Scatter Seed", &randomSeed);
-    SliderInt("Points", &pointCountToMake, 1, 500);
+            InputInt("Seed", &randomSeed);
+            SliderInt("Count", &pointCountToMake, 1, 100);
 
-    if (Button("Make it!", ImVec2(-1, 40))) {
-        userPoints.clear();
-        hullPoints.clear();
-        srand(randomSeed);
-        for (int i = 0; i < pointCountToMake; i++) {
-            float rx = ((float)rand() / RAND_MAX) * 1.6f - 0.8f;
-            float ry = ((float)rand() / RAND_MAX) * 1.6f - 0.8f;
-            userPoints.push_back({ rx, ry });
+            if (Button("Make it!", ImVec2(-1, 30))) {
+                userPoints.clear();
+                hullPoints.clear();
+                srand(randomSeed);
+                for (int i = 0; i < pointCountToMake; i++) {
+                    float rx = ((float)rand() / RAND_MAX) * 1.6f - 0.8f;
+                    float ry = ((float)rand() / RAND_MAX) * 1.6f - 0.8f;
+                    userPoints.push_back({ rx, ry });
+                }
+            }
+
+            if (Button("Erase All", ImVec2(-1, 30))) {
+                userPoints.clear();
+                hullPoints.clear();
+            }
         }
-    }
-    
-    if (Button("Erase All", ImVec2(-1, 40))) {
-        userPoints.clear();
-        hullPoints.clear();
-    }
+
+        Spacing();
+        Separator();
+        Spacing();
+
+        if (CollapsingHeader("Visual Styles", ImGuiTreeNodeFlags_DefaultOpen)) {
+            Text("Point Style");
+            ColorEdit3("Color##1", pointColor);
+            SliderFloat("Size##1", &pointSize, 1.0f, 20.0f);
+
+            Spacing();
+
+            Text("Hull Style");
+            ColorEdit3("Color##2", hullColor);
+            SliderFloat("Width##2", &lineWidth, 1.0f, 10.0f);
+
+            Spacing();
+
+            Text("Background Style");
+            ColorEdit4("Color##3", bgColor);
+        }
+
+        Spacing();
+        Separator();
+        Spacing();
+
+        Text("Add Point By Coord");
+        InputFloat2("(X, Y)", pixelInput, "%.0f");
+        
+        if (Button("Add Point##Pixel", ImVec2(-1, 30))) {
+            if (pixelInput[0] >= 0 && pixelInput[0] <= screenW &&
+                pixelInput[1] >= 40.0f && pixelInput[1] <= (screenH - 70.0f))
+            {
+                float ndcX = (pixelInput[0] / screenW) * 2.0f - 1.0f;
+                float ndcY = (pixelInput[1] / screenH) * 2.0f - 1.0f;
+
+                // OpenGL은 Y축이 아래에서 위로 증가하지만, 
+                // 픽셀 좌표(마우스 등)는 위에서 아래로 증가하는 경우가 많습니다.
+                // 만약 Y축이 반전되어 찍힌다면 아래처럼 수정하세요:
+                // float ndcY = 1.0f - (pixelInput[1] / screenH) * 2.0f;
+
+                userPoints.push_back({ ndcX, ndcY });
+                hullPoints.clear();
+            }
+            else {
+                OpenPopup("Invalid Pixel Range");
+            }
+        }
+
+        ImVec2 center = ImVec2(screenW * 0.5f, screenH * 0.5f);
+        SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+        if (BeginPopupModal("Invalid Pixel Range", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            Text("Input is out of screen bounds!");
+            Text("Current Screen: %.0f x %.0f", screenW, screenH);
+            Text("Your Input: (%.0f, %.0f)", pixelInput[0], pixelInput[1]);
+            Spacing();
+            Text("Valid Y Range Excepted By Top/Bottom Bars : 40 ~ %.0f", screenH - 70.f);
+
+            Separator();
+            if (Button("OK", ImVec2(120, 0))) {
+                CloseCurrentPopup();
+            }
+            EndPopup();
+        }
     End();
 
     SetNextWindowPos(ImVec2(0, screenH - 70.0f), ImGuiCond_Always);
@@ -189,20 +266,21 @@ void render(GLFWwindow* window) {
     GLint colorLoc = glGetUniformLocation(program, "outColor");
 
     float axes[] = { -1, 0, 1, 0, 0, -1, 0, 1 };
+    glLineWidth(1.f);
     glUniform4f(colorLoc, 0.5f, 0.5f, 0.5f, 1.0f);
     glBufferData(GL_ARRAY_BUFFER, sizeof(axes), axes, GL_DYNAMIC_DRAW);
     glDrawArrays(GL_LINES, 0, 4);
 
     if (hullPoints.size() >= 3) {
-        glLineWidth(3.0f);
-        glUniform4f(colorLoc, 1.0f, 0.0f, 0.0f, 1.0f);
+        glLineWidth(lineWidth);
+        glUniform4f(colorLoc, hullColor[0], hullColor[1], hullColor[2], hullColor[3]);
         glBufferData(GL_ARRAY_BUFFER, hullPoints.size() * sizeof(Point), hullPoints.data(), GL_DYNAMIC_DRAW);
         glDrawArrays(GL_LINE_LOOP, 0, (GLsizei)hullPoints.size());
     }
 
     if (!userPoints.empty()) {
-        glPointSize(10.0f);
-        glUniform4f(colorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+        glPointSize(pointSize);
+        glUniform4f(colorLoc, pointColor[0], pointColor[1], pointColor[2], pointColor[3]);
         glBufferData(GL_ARRAY_BUFFER, userPoints.size() * sizeof(Point), userPoints.data(), GL_DYNAMIC_DRAW);
         glDrawArrays(GL_POINTS, 0, (GLsizei)userPoints.size());
     }
